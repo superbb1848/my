@@ -1,0 +1,215 @@
+#!/bin/sh
+####################generate snap_shot_id########################
+. /oracle/.profile
+sqlplus "/as sysdba"<<EOF
+spool /oracle/script/awr_store/snap_id
+select snap_id from dba_hist_snapshot where to_char(BEGIN_INTERVAL_TIME,'yyyymmdd')=to_char(sysdate-1,'yyyymmdd') and instance_numbe
+r=1 order by snap_id;
+spool off
+exit
+EOF
+####################end#########################
+####################generate snapshot#################### 
+cd /oracle/script/awr_store
+grep '^ ' snap_id.lst|grep -v -i 'snap'>snap_id 
+for snapid in `cat /oracle/script/awr_store/snap_id`
+do
+snapnext=`expr $snapid + 1`
+sqlplus "/as sysdba"<<EOF
+start ?/rdbms/admin/awrrpt.sql 
+text
+2
+$snapid
+$snapnext
+awrrpt_$snapid.txt
+exit
+EOF
+################################insert data into database emrep######################## 
+################################the definition of the variable########################
+>/oracle/script/awr_store/event
+start_date=$(sed -n '14,15p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i begin|awk '{printf $4}')
+start_time=$(sed -n '14,15p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i begin|awk '{printf $5}')
+snap_start_time=$(echo $start_date $start_time)
+end_date=$(sed -n '14,15p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i end|awk '{printf $4}')
+end_time=$(sed -n '14,15p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i end|awk '{printf $5}')
+snap_end_time=$(echo $end_date $end_time)
+instance_name=$(sed -n '6p' /oracle/script/awr_store/awrrpt_$snapid.txt|awk '{printf $3}')
+db_time_pers=$(sed -n '26,40p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i 'db time'|awk '{printf $3}')
+redo_size_pers=$(sed -n '26,40p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i 'redo size'|awk '{printf $3}')
+db_cpu_pers=$(sed -n '26,40p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i 'db cpu'|awk '{printf $3}')
+logical_reads_pers=$(sed -n '26,40p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i 'logical reads'|awk '{printf $3}')
+block_changes_pers=$(sed -n '26,40p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i 'block changes'|awk '{printf $3}')
+physical_reads_pers=$(sed -n '26,40p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i 'physical reads'|awk '{printf $3}')
+physical_writes_pers=$(sed -n '26,40p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i 'physical writes'|awk '{printf $3}')
+user_calls_pers=$(sed -n '26,40p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i 'user calls'|awk '{printf $3}')
+parses_pers=$(sed -n '26,40p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i 'parses'|grep -v -i 'hard'|awk '{printf $2}') 
+hard_parses_pers=$(sed -n '26,40p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i 'hard parses'|awk '{printf $3}')
+logons_pers=$(sed -n '26,40p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i 'logon'|awk '{printf $2}')
+executes_pers=$(sed -n '26,40p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i 'executes'|awk '{printf $2}')
+rollbacks_pers=$(sed -n '26,40p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i 'rollbacks'|awk '{printf $2}')
+transactions_pers=$(sed -n '26,40p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i 'transactions'|awk '{printf $2}')
+#############################################seperate##########################################
+db_time_pert=$(sed -n '26,40p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i 'db time'|awk '{printf $4}')
+redo_size_pert=$(sed -n '26,40p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i 'redo size'|awk '{printf $4}')
+db_cpu_pert=$(sed -n '26,40p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i 'db cpu'|awk '{printf $4}')
+logical_reads_pert=$(sed -n '26,40p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i 'logical reads'|awk '{printf $4}')
+block_changes_pert=$(sed -n '26,40p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i 'block changes'|awk '{printf $4}')
+physical_reads_pert=$(sed -n '26,40p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i 'physical reads'|awk '{printf $4}')
+physical_writes_pert=$(sed -n '26,40p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i 'physical writes'|awk '{printf $4}')
+user_calls_pert=$(sed -n '26,40p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i 'user_calls'|awk '{printf $4}')
+parses_pert=$(sed -n '26,40p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i 'parses'|grep -v -i 'hard'|awk '{printf $3}')
+hard_parses_pert=$(sed -n '26,40p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i 'hard parses'|awk '{printf $4}')
+logons_pert=$(sed -n '26,40p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i 'logon'|awk '{printf $3}')
+executes_pert=$(sed -n '26,40p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i 'executes'|awk '{printf $3}')
+rollbacks_pert=$(sed -n '26,40p' /oracle/script/awr_store/awrrpt_$snapid.txt|grep -i 'rollbacks'|awk '{printf $3}')
+################################################end of definition of variable##########################
+################################################top event##############################################
+sed -n '62,66p' /oracle/script/awr_store/awrrpt_$snapid.txt|while read impline;do echo '('$impline')'>>/oracle/script/awr_store/even
+t;done;
+event_desc=$(sed -n '1,5p' /oracle/script/awr_store/event)
+sqlplus em_db_mon/welcome1@emrep<<EOF
+insert into DB_TOP_EVENT values('$instance_name','$snap_start_time','$snap_end_time','$event_desc');
+insert into db_load_profile_pers values('$instance_name','$snap_start_time','$db_time_pers','$db_cpu_pers','$redo_size_pers','$logic
+al_reads_pers','$block_changes_pers','$physical_reads_pers','$physical_writes_pers','$user_calls_pers','$parses_pers','$hard_parses_
+pers','$logons_pers','$executes_pers','$rollbacks_pers','$transactions_pers');
+insert into db_load_profile_pert values('$instance_name','$snap_start_time','$db_time_pert','$db_cpu_pert','$redo_size_pert','$logic
+al_reads_pert','$block_changes_pert','$physical_reads_pert','$physical_writes_pert','$user_calls_pert','$parses_pert','$hard_parses_
+pert','$logons_pert','$executes_pert','$rollbacks_pert');
+commit;
+exit
+EOF
+################################################top sql order by elapse#####################################
+sql_order_by_elapse_start_linenum_init=$(grep -n 'SQL ordered by Elapsed Time' /oracle/script/awr_store/awrrpt_$snapid.txt|sed 's/:/
+ /p'|sed -n '1p'|awk '{printf $1}')
+sql_order_by_cpu_start_linenum_init=$(grep -n 'SQL ordered by CPU Time' /oracle/script/awr_store/awrrpt_$snapid.txt|sed 's/:/ /p'|se
+d -n '1p'|awk '{printf $1}')
+sed -n ''$sql_order_by_elapse_start_linenum_init','$sql_order_by_cpu_start_linenum_init'p' /oracle/script/awr_store/awrrpt_$snapid.t
+xt |grep ' [a-z0-9]\{13\}$'|while read impline
+do
+elapse_time=$(echo $impline|awk '{printf $1}')
+executions=$(echo $impline|awk '{printf $2}')
+elapse_time_per=$(echo $impline|awk '{printf $3}')
+total_percent=$(echo $impline|awk '{printf $4}')
+cpu_percent=$(echo $impline|awk '{printf $5}')
+io_percent=$(echo $impline|awk '{printf $6}')
+sql_id=$(echo $impline|awk '{printf $7}')
+sqlplus em_db_mon/welcome1@emrep<<EOF
+insert into db_top_sql_order_by_elapse values('$instance_name','$snap_start_time','$snap_end_time','$sql_id','$elapse_time','$execut
+ions','$elapse_time_per','$total_percent','$cpu_percent','$io_percent');
+commit;
+exit
+EOF
+done
+################################################top sql order by cpu########################################
+sql_order_by_userio_start_linenum_init=$(grep -n 'SQL ordered by User I/O Wait' /oracle/script/awr_store/awrrpt_$snapid.txt|sed 's/:
+/ /p'|sed -n '1p'|awk '{printf $1}')
+sed -n ''$sql_order_by_cpu_start_linenum_init','$sql_order_by_userio_start_linenum_init'p' /oracle/script/awr_store/awrrpt_$snapid.t
+xt |grep ' [a-z0-9]\{13\}$'|grep -v '-'|while read impline
+do
+cpu_time=$(echo $impline|awk '{printf $1}')
+executions=$(echo $impline|awk '{printf $2}')
+cpu_time_per=$(echo $impline|awk '{printf $3}')
+total_percent=$(echo $impline|awk '{printf $4}')
+elapse_time=$(echo $impline|awk '{printf $5}')
+cpu_percent=$(echo $impline|awk '{printf $6}')
+io_percent=$(echo $impline|awk '{printf $7}')
+sql_id=$(echo $impline|awk '{printf $8}')
+sqlplus em_db_mon/welcome1@emrep<<EOF
+insert into db_top_sql_order_by_cpu values('$instance_name','$snap_start_time','$snap_end_time','$sql_id','$cpu_time','$executions',
+'$cpu_time_per','$total_percent','$elapse_time','$cpu_percent','$io_percent');
+commit;
+exit
+EOF
+done
+###############################################top sql order by executions######################################
+sql_order_by_execution_start_linenum_init=$(grep -n 'SQL ordered by Executions' /oracle/script/awr_store/awrrpt_$snapid.txt|sed 's/:
+/ /p'|sed -n '1p'|awk '{printf $1}')
+sql_order_by_parsecall_start_linenum_init=$(grep -n 'SQL ordered by Parse Calls' /oracle/script/awr_store/awrrpt_$snapid.txt|sed 's/
+:/ /p'|sed -n '1p'|awk '{printf $1}')
+sed -n ''$sql_order_by_execution_start_linenum_init','$sql_order_by_parsecall_start_linenum_init'p' /oracle/script/awr_store/awrrpt_
+$snapid.txt |grep ' [a-z0-9]\{11\}$'|while read impline
+do
+executions=$(echo $impline|awk '{printf $1}')
+rows_processed=$(echo $impline|awk '{printf $2}')
+rows_perexec=$(echo $impline|awk '{printf $3}')
+elapse_time=$(echo $impline|awk '{printf $4}')
+cpu_percent=$(echo $impline|awk '{printf $5}')
+io_percent=$(echo $impline|awk '{printf $6}')
+sql_id=$(echo $impline|awk '{printf $7}')
+sqlplus em_db_mon/welcome1@emrep<<EOF
+insert into db_top_sql_order_by_execution values('$instance_name','$snap_start_time','$snap_end_time','$sql_id','$executions','$rows
+_processed','$rows_perexec','$elapse_time','$cpu_percent','$io_percent');
+commit;
+exit
+EOF
+done
+###############################################hot segments order by logical reads############################
+segments_order_by_logicalread_start_linenum_init=$(grep -n 'Segments by Logical Reads' /oracle/script/awr_store/awrrpt_$snapid.txt|s
+ed 's/:/ /p'|sed -n '1p'|awk '{printf $1}')
+segments_order_by_physicalread_start_linenum_init=$(grep -n 'Segments by Physical Reads' /oracle/script/awr_store/awrrpt_$snapid.txt
+|sed 's/:/ /p'|sed -n '1p'|awk '{printf $1}')
+segments_order_by_logicalread_end_linenum=`expr $segments_order_by_physicalread_start_linenum_init - 5`
+segments_order_by_logicalread_start_linenum=`expr $segments_order_by_logicalread_start_linenum_init + 7`
+sed -n ''$segments_order_by_logicalread_start_linenum','$segments_order_by_logicalread_end_linenum'p' /oracle/script/awr_store/awrrp
+t_$snapid.txt|grep -v -i 'unav'|while read impline
+do
+echo $impline>/oracle/script/awr_store/impline
+col_num=$(awk '{printf NF}' /oracle/script/awr_store/impline)
+if [ $col_num = 6 ]
+then
+owner_name=$(echo $impline|awk '{printf $1}')
+tablespace_name=$(echo $impline|awk '{printf $2}')
+obj_name=$(echo $impline|awk '{printf $3}')
+logical_reads=$(echo $impline|awk '{printf $5}')
+total_percent=$(echo $impline|awk '{printf $6}')
+elif [ $col_num = 7 ]
+then
+owner_name=$(echo $impline|awk '{printf $1}')
+tablespace_name=$(echo $impline|awk '{printf $2}')
+obj_name=$(echo $impline|awk '{printf $3 $4}')
+logical_reads=$(echo $impline|awk '{printf $6}')
+total_percent=$(echo $impline|awk '{printf $7}')
+else echo 'error'
+fi
+sqlplus em_db_mon/welcome1@emrep<<EOF
+insert into hot_segments_logicalread values('$instance_name','$snap_start_time','$owner_name','$tablespace_name','$obj_name','$logic
+al_reads','$total_percent');
+commit;
+exit
+EOF
+done
+###############################################hot segments order by physical reads############################
+segments_order_by_physicalreadrq_start_linenum_init=$(grep -n 'Segments by Physical Read RequestsDB' /oracle/script/awr_store/awrrpt
+_$snapid.txt|sed 's/:/ /p'|sed -n '1p'|awk '{printf $1}')
+segments_order_by_physicalread_end_linenum=`expr $segments_order_by_physicalreadrq_start_linenum_init - 5`
+segments_order_by_physicalread_start_linenum=`expr $segments_order_by_physicalread_start_linenum_init + 7`
+sed -n ''$segments_order_by_physicalread_start_linenum','$segments_order_by_physicalread_end_linenum'p' /oracle/script/awr_store/awr
+rpt_$snapid.txt|grep -v -i 'unav'|while read impline
+do
+echo $impline>/oracle/script/awr_store/impline
+col_num=$(awk '{printf NF}' /oracle/script/awr_store/impline)
+if [ $col_num = 6 ] 
+then
+owner_name=$(echo $impline|awk '{printf $1}')
+tablespace_name=$(echo $impline|awk '{printf $2}')
+obj_name=$(echo $impline|awk '{printf $3}')
+physical_reads=$(echo $impline|awk '{printf $5}')
+total_percent=$(echo $impline|awk '{printf $6}')
+elif [ $col_num = 7 ] 
+then
+owner_name=$(echo $impline|awk '{printf $1}')
+tablespace_name=$(echo $impline|awk '{printf $2}')
+obj_name=$(echo $impline|awk '{printf $3 $4}')
+physical_reads=$(echo $impline|awk '{printf $6}')
+total_percent=$(echo $impline|awk '{printf $7}')
+else echo 'error'
+fi
+sqlplus em_db_mon/welcome1@emrep<<EOF
+insert into hot_segments_physicalread values('$instance_name','$snap_start_time','$owner_name','$tablespace_name','$obj_name','$phys
+ical_reads','$total_percent');
+commit;
+exit
+EOF
+done
+#############################################################
+done
